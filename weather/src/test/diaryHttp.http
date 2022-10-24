@@ -1,0 +1,7 @@
+###
+POST http://localhost:8080/create/diary?date=2022-10-24
+content-type:application/json
+
+{
+  "text": "test text"
+}
