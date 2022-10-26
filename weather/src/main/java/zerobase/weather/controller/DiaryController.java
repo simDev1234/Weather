@@ -22,9 +22,7 @@ public class DiaryController {
     void createDiary(@RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
                      LocalDate date, @RequestBody String text){
 
-        Diary diary = diaryService.createDiary(date, text);
-
-        System.out.println(diary);
+        diaryService.createDiary(date, text);
     }
 
     @GetMapping(value = "/read/diary")

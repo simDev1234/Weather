@@ -5,10 +5,14 @@ import org.json.simple.JSONObject;
 import org.json.simple.parser.JSONParser;
 import org.json.simple.parser.ParseException;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.CollectionUtils;
+import zerobase.weather.domain.DateWeather;
 import zerobase.weather.domain.Diary;
+import zerobase.weather.repository.DateWeatherRepository;
 import zerobase.weather.repository.DiaryRepository;
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
@@ -27,29 +31,36 @@ public class DiaryService {
 
     private final DiaryRepository diaryRepository;
 
-    public DiaryService(DiaryRepository diaryRepository) {
+    private final DateWeatherRepository dateWeatherRepository;
+
+    public DiaryService(DiaryRepository diaryRepository, DateWeatherRepository dateWeatherRepository) {
         this.diaryRepository = diaryRepository;
+        this.dateWeatherRepository = dateWeatherRepository;
+    }
+
+    // 매일 오전 한 시 마다 API에서 데이터를 가져온다.
+    // @Scheduled(cron = "0 0 1 * * *")
+
+    // 매 5초마다 API에서 데이터를 가져온다.
+    // @Scheduled(cron = "0/5 * * * * *")
+    @Transactional
+    @Scheduled(cron = "0 0 1 * * *")
+    public void saveWeatherDate(){
+        dateWeatherRepository.save(getWeatherFromApi());
     }
 
     @Transactional(isolation = Isolation.SERIALIZABLE)
-    public Diary createDiary(LocalDate date, String text){
-        // openweathermap에서 날씨 데이터 가져오기
-        String weatherData = getWeatherString();
+    public void createDiary(LocalDate date, String text){
+        // 날씨 데이터 가져오기 (API or DB? -- 한시에 저장되었다면 DB)
+        DateWeather dateWeather = getDateWeather(date);
 
-        // 받아온 날씨 json 파싱하기
-        Map<String, Object> parsedWeather = parseWeather(weatherData);
-        
-        // 파싱된 데이터 + 일기 값 우리 db에 넣기
-        return diaryRepository.save(
-                Diary.builder()
-                        .weather(parsedWeather.get("main").toString())
-                        .icon(parsedWeather.get("icon").toString())
-                        .temperature((Double)parsedWeather.get("temp"))
-                        .text(text)
-                        .date(date)
-                        .build()
-        );
-    };
+        // 우리 db에 넣기
+        Diary nowDiary = new Diary();
+        nowDiary.setDateWeather(dateWeather);
+        nowDiary.setText(text);
+        nowDiary.setDate(date);
+        diaryRepository.save(nowDiary);
+    }
 
     private String getWeatherString(){
         String apiUrl = "https://api.openweathermap.org/data/2.5/weather?q=seoul&appid=" + apiKey;
@@ -104,6 +115,40 @@ public class DiaryService {
         resultMap.put("icon", weatherData.get("icon"));
 
         return resultMap;
+    }
+
+    private DateWeather getWeatherFromApi(){
+        // openweathermap에서 날씨 데이터 가져오기
+        String weatherData = getWeatherString();
+
+        // 받아온 날씨 json 파싱하기
+        Map<String, Object> parsedWeather = parseWeather(weatherData);
+
+        DateWeather dateWeather = new DateWeather();
+        dateWeather.setDate(LocalDate.now());
+        dateWeather.setWeather(parsedWeather.get("main").toString());
+        dateWeather.setIcon(parsedWeather.get("icon").toString());
+        dateWeather.setTemperature((Double) parsedWeather.get("temp"));
+
+        return dateWeather;
+    }
+
+    private DateWeather getDateWeather(LocalDate date) {
+
+        List<DateWeather> dateWeatherListFromDB = dateWeatherRepository.findAllByDate(date);
+
+        if (CollectionUtils.isEmpty(dateWeatherListFromDB)) {
+
+            // 새로 API에서 날씨 정보를 가져와야한다.
+            // 정책상 현재 날씨를 가져오도록 하거나, 날씨 없이 일기를 쓰도록
+            return getWeatherFromApi();
+
+        } else {
+
+            return dateWeatherListFromDB.get(0);
+
+        }
+
     }
 
     @Transactional(readOnly = true)
