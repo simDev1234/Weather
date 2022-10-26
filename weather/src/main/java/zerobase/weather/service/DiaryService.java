@@ -15,6 +15,7 @@ import org.springframework.util.CollectionUtils;
 import zerobase.weather.WeatherApplication;
 import zerobase.weather.domain.DateWeather;
 import zerobase.weather.domain.Diary;
+import zerobase.weather.error.InValidDate;
 import zerobase.weather.repository.DateWeatherRepository;
 import zerobase.weather.repository.DiaryRepository;
 import java.io.BufferedReader;
@@ -164,8 +165,6 @@ public class DiaryService {
 
     @Transactional(readOnly = true)
     public List<Diary> readDiary(LocalDate date) {
-
-        logger.debug("read diary");
 
         return diaryRepository.findAllByDate(date);
 
